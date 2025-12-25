@@ -46,5 +46,11 @@ jobs:
         with:
           token: ${{ secrets.REPLICATE_API_TOKEN }}
 
+      - name: Build with Cog
+        run: cog build -t r8.im/ahmetsaid/pbr-generator
+
+      - name: Login to Replicate Registry
+        run: echo ${{ secrets.REPLICATE_API_TOKEN }} | docker login r8.im -u ahmetsaid --password-stdin
+
       - name: Push to Replicate
-        run: cog push r8.im/ahmetsaid/pbr-generator --no-cache
+        run: docker push r8.im/ahmetsaid/pbr-generator
