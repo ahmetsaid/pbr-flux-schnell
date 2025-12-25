@@ -1,6 +1,4 @@
-# Configuration for Cog ⚙️
-# Reference: https://cog.run/yaml
-
+# Configuration for Cog
 build:
   gpu: true
   cuda: "12.1"
@@ -13,15 +11,12 @@ build:
     - "torch==2.2"
     - "torchvision"
     - "diffusers==0.30.0"
-    - "transformers==4.43.3"
+    - "transformers==4.42.0"
     - "accelerate==0.33.0"
     - "sentencepiece==0.2.0"
     - "protobuf==5.27.3"
     - "numpy==1.26.4"
     - "pillow==10.4.0"
     - "scipy==1.14.0"
-
-  run:
-    - curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/latest/download/pget_$(uname -s)_$(uname -m)" && chmod +x /usr/local/bin/pget
 
 predict: "predict.py:Predictor"
