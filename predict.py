@@ -1,11 +1,11 @@
-# PBR Texture Generator - Simplified version
+# PBR Texture Generator - SDXL Turbo version
 from cog import BasePredictor, Input, Path
 import os
 import torch
 import numpy as np
 from typing import Iterator
 from PIL import Image
-from diffusers import FluxPipeline
+from diffusers import AutoPipelineForText2Image
 from scipy.ndimage import sobel, gaussian_filter
 
 
@@ -69,12 +69,13 @@ def generate_ao_map(diffuse: Image.Image) -> Image.Image:
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
-        print("Loading Flux model from HuggingFace...")
-        self.pipe = FluxPipeline.from_pretrained(
-            "black-forest-labs/FLUX.1-schnell",
-            torch_dtype=torch.bfloat16
+        print("Loading SDXL Turbo...")
+        self.pipe = AutoPipelineForText2Image.from_pretrained(
+            "stabilityai/sdxl-turbo",
+            torch_dtype=torch.float16,
+            variant="fp16"
         )
-        self.pipe.enable_model_cpu_offload()
+        self.pipe.to("cuda")
         print("Model ready!")
 
     @torch.inference_mode()
@@ -87,7 +88,7 @@ class Predictor(BasePredictor):
         resolution: int = Input(
             description="Output resolution",
             choices=[512, 1024],
-            default=1024
+            default=512
         ),
         tiling_strength: float = Input(
             description="Seamless tiling strength (0-1)",
