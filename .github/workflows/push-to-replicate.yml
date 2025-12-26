@@ -44,8 +44,5 @@ jobs:
           echo "=== Checking predict.py inside Docker image ==="
           docker run --rm --entrypoint cat r8.im/ahmetsaid/texture-gen /src/predict.py | head -15
 
-      - name: Login to Replicate Registry
-        run: echo ${{ secrets.REPLICATE_API_TOKEN }} | docker login r8.im -u ahmetsaid --password-stdin
-
       - name: Push to Replicate
-        run: docker push r8.im/ahmetsaid/texture-gen
+        run: cog push r8.im/ahmetsaid/texture-gen
