@@ -18,7 +18,6 @@ build:
     - "scipy"
     - "safetensors"
   run:
-    - mkdir -p /root/.cache/huggingface
-    - cp -r model_cache/* /root/.cache/huggingface/ || true
+    - echo "Model cache will be copied during build"
 
 predict: "predict.py:Predictor"

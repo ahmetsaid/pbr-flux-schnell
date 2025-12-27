@@ -90,7 +90,7 @@ class Predictor(BasePredictor):
     def setup(self) -> None:
         print("Loading Flux Schnell...")
         self.pipe = FluxPipeline.from_pretrained(
-            "black-forest-labs/FLUX.1-schnell",
+            "/src/model_cache/flux-schnell",
             torch_dtype=torch.bfloat16,
             local_files_only=True
         )

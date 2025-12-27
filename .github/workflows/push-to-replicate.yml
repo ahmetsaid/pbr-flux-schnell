@@ -25,15 +25,12 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pip install huggingface_hub diffusers torch transformers accelerate protobuf sentencepiece
+          pip install huggingface_hub
           mkdir -p model_cache
           python -c "
-          import os
-          from huggingface_hub import login
+          from huggingface_hub import login, snapshot_download
           login(token='$HF_TOKEN')
-          os.environ['HF_HOME'] = 'model_cache'
-          from diffusers import FluxPipeline
-          FluxPipeline.from_pretrained('black-forest-labs/FLUX.1-schnell', torch_dtype='auto', cache_dir='model_cache')
+          snapshot_download('black-forest-labs/FLUX.1-schnell', local_dir='model_cache/flux-schnell')
           "
           ls -la model_cache/
 
