@@ -226,6 +226,7 @@ class HeightProcessor:
 class NormalGenerator:
     """
     Generate normal maps from height maps using Sobel operators.
+    Optionally blend with color-derived normals for fine detail.
 
     Reference:
     - https://learnopengl.com/Advanced-Lighting/Normal-Mapping
@@ -235,33 +236,73 @@ class NormalGenerator:
         self,
         height: np.ndarray,
         strength: float = 1.0,
-        format: Literal["opengl", "directx"] = "opengl"
+        format: Literal["opengl", "directx"] = "opengl",
+        color_image: Image.Image = None,
+        detail_blend: float = 0.25
     ) -> Image.Image:
         """
         Convert height map to normal map using Sobel derivatives.
+        Optionally blends in high-frequency detail from color image.
 
         Args:
             height: Height map [0, 1], float32
             strength: Normal intensity multiplier
             format: "opengl" (Y+ up) or "directx" (Y- up)
+            color_image: Optional RGB image for fine detail extraction
+            detail_blend: How much color-based detail to blend (0-1)
 
         Returns:
             PIL RGB image with normal map
         """
-        # Apply slight blur to reduce noise in derivatives
-        height_smooth = gaussian_filter(height, sigma=0.5)
+        # Generate normals from height (smooth, large-scale)
+        height_normals = self._compute_normals(height, strength, format, sigma=0.5)
+
+        # If color image provided, blend in fine detail
+        if color_image is not None and detail_blend > 0:
+            gray = np.array(color_image.convert("L"), dtype=np.float32) / 255.0
+            # Use smaller sigma for sharper detail from color
+            color_normals = self._compute_normals(gray, strength * 1.5, format, sigma=0.3)
+
+            # Blend: height for large-scale, color for fine detail
+            normals = height_normals * (1 - detail_blend) + color_normals * detail_blend
+
+            # Re-normalize after blending
+            norms = np.linalg.norm(normals, axis=-1, keepdims=True)
+            normals = normals / (norms + 1e-8)
+        else:
+            normals = height_normals
+
+        # Convert from [-1, 1] to [0, 255]
+        normal_rgb = ((normals + 1) * 0.5 * 255).astype(np.uint8)
+
+        return Image.fromarray(normal_rgb, mode="RGB")
+
+    def _compute_normals(
+        self,
+        source: np.ndarray,
+        strength: float,
+        format: str,
+        sigma: float = 0.5
+    ) -> np.ndarray:
+        """
+        Compute normal vectors from a grayscale source using Sobel.
+
+        Returns:
+            Normalized vectors as (H, W, 3) array in range [-1, 1]
+        """
+        # Apply blur to control detail level
+        smoothed = gaussian_filter(source, sigma=sigma)
 
         # Compute partial derivatives using Sobel
-        dx = sobel(height_smooth, axis=1) * strength  # dh/dx
-        dy = sobel(height_smooth, axis=0) * strength  # dh/dy
+        dx = sobel(smoothed, axis=1) * strength
+        dy = sobel(smoothed, axis=0) * strength
 
         # For OpenGL: +Y is up, so we negate dy
-        # For DirectX: +Y is down, so dy stays positive
         if format == "opengl":
             dy = -dy
 
         # Z component
-        dz = np.ones_like(height)
+        dz = np.ones_like(source)
 
         # Stack into (H, W, 3)
         normals = np.stack([dx, dy, dz], axis=-1)
@@ -270,10 +311,7 @@ class NormalGenerator:
         norms = np.linalg.norm(normals, axis=-1, keepdims=True)
         normals = normals / (norms + 1e-8)
 
-        # Convert from [-1, 1] to [0, 255]
-        normal_rgb = ((normals + 1) * 0.5 * 255).astype(np.uint8)
-
-        return Image.fromarray(normal_rgb, mode="RGB")
+        return normals
 
 
 # =============================================================================

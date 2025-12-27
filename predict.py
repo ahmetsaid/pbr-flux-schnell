@@ -101,6 +101,10 @@ class Predictor(BasePredictor):
             description="Normal map intensity",
             ge=0.1, le=5.0, default=1.0
         ),
+        normal_detail: float = Input(
+            description="Blend in fine detail from color (0=height only, 1=max detail)",
+            ge=0.0, le=1.0, default=0.25
+        ),
         normal_format: str = Input(
             description="Normal map format (opengl=Y+ up for Blender/Unreal, directx=Y- for Unity)",
             choices=["opengl", "directx"],
@@ -174,7 +178,9 @@ class Predictor(BasePredictor):
         normal = self.normal_generator.height_to_normal(
             height,
             strength=normal_strength,
-            format=normal_format
+            format=normal_format,
+            color_image=image,
+            detail_blend=normal_detail
         )
 
         print("Generating AO map...")
