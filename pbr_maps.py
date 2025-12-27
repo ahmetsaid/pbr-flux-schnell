@@ -158,16 +158,14 @@ class HeightProcessor:
         strength: float = 0.5
     ) -> np.ndarray:
         """
-        Make height map seamlessly tileable using offset method.
+        Make height map seamlessly tileable using edge blending.
 
-        Uses the classic "offset and blend" technique:
-        1. Shift image by 50% to put edges in center
-        2. Blend the center seams with smooth falloff
-        3. Result tiles perfectly at original edges
+        Creates seamless edges by blending opposite borders together.
+        Uses cosine interpolation for smooth falloff.
 
         Args:
             height: Height map [0, 1]
-            strength: Blend intensity (0-1)
+            strength: Blend region size (0-1, as fraction of image)
 
         Returns:
             Tile-safe height map
@@ -176,47 +174,36 @@ class HeightProcessor:
             return height
 
         h, w = height.shape
-        blend_width = int(min(h, w) * 0.15 * strength)  # Blend region
-        if blend_width < 4:
-            return height
+        # Blend region - larger = smoother but more blurred edges
+        blend_size = max(4, int(min(h, w) * 0.20 * strength))
 
-        # Step 1: Shift image by 50% - seams now in center
-        shifted = np.roll(np.roll(height, h // 2, axis=0), w // 2, axis=1)
+        result = height.copy()
 
-        # Step 2: Create smooth blend mask for center cross
-        mask = self._create_center_blend_mask(h, w, blend_width)
+        # Create cosine weights for smooth blending
+        weights = self._cosine_weights(blend_size)
 
-        # Step 3: Blend shifted with original at center
-        # Where mask=1, use original (edges); where mask=0, use shifted (center)
-        result = shifted * (1 - mask) + height * mask
+        # Horizontal seamless: blend left edge with wrapped right edge
+        for i in range(blend_size):
+            t = weights[i]
+            # Left side: blend with right side
+            result[:, i] = (1 - t) * height[:, w - blend_size + i] + t * height[:, i]
+            # Right side: blend with left side (mirror)
+            result[:, w - 1 - i] = (1 - t) * height[:, blend_size - 1 - i] + t * height[:, w - 1 - i]
 
-        # Step 4: Shift back
-        result = np.roll(np.roll(result, -h // 2, axis=0), -w // 2, axis=1)
+        # Vertical seamless: blend top edge with wrapped bottom edge
+        for i in range(blend_size):
+            t = weights[i]
+            # Top side: blend with bottom side
+            result[i, :] = (1 - t) * result[h - blend_size + i, :] + t * result[i, :]
+            # Bottom side: blend with top side (mirror)
+            result[h - 1 - i, :] = (1 - t) * result[blend_size - 1 - i, :] + t * result[h - 1 - i, :]
 
         return result.astype(np.float32)
 
-    def _create_center_blend_mask(self, h: int, w: int, blend_width: int) -> np.ndarray:
-        """
-        Create a mask that's 0 at center cross, 1 at edges.
-        Uses smoothstep for artifact-free blending.
-        """
-        # Horizontal distance from center
-        x = np.abs(np.arange(w) - w // 2)
-        x_mask = self._smoothstep(x, blend_width // 2, blend_width)
-
-        # Vertical distance from center
-        y = np.abs(np.arange(h) - h // 2)
-        y_mask = self._smoothstep(y, blend_width // 2, blend_width)
-
-        # Combine: both must be away from center
-        mask = np.outer(y_mask, np.ones(w)) * np.outer(np.ones(h), x_mask)
-
-        return mask
-
-    def _smoothstep(self, x: np.ndarray, edge0: float, edge1: float) -> np.ndarray:
-        """Smooth Hermite interpolation between 0 and 1."""
-        t = np.clip((x - edge0) / (edge1 - edge0 + 1e-8), 0, 1)
-        return t * t * (3 - 2 * t)
+    def _cosine_weights(self, size: int) -> np.ndarray:
+        """Generate cosine interpolation weights from 0 to 1."""
+        t = np.linspace(0, np.pi / 2, size)
+        return np.sin(t)  # Smooth 0 to 1 curve
 
 
 # =============================================================================
@@ -522,7 +509,7 @@ class EmissiveGenerator:
 
 class SeamlessTiling:
     """
-    Make RGB images seamlessly tileable using offset method.
+    Make RGB images seamlessly tileable using edge blending.
     """
 
     def make_seamless(
@@ -531,16 +518,14 @@ class SeamlessTiling:
         strength: float = 0.5
     ) -> Image.Image:
         """
-        Make RGB image seamlessly tileable using offset method.
+        Make RGB image seamlessly tileable using edge blending.
 
-        Uses the classic "offset and blend" technique:
-        1. Shift image by 50% to put edges in center
-        2. Blend the center seams with smooth falloff
-        3. Result tiles perfectly at original edges
+        Creates seamless edges by blending opposite borders together.
+        Uses cosine interpolation for smooth falloff.
 
         Args:
             image: RGB PIL image
-            strength: Blend strength (0-1)
+            strength: Blend region size (0-1, as fraction of image)
 
         Returns:
             Seamless PIL RGB image
@@ -548,53 +533,33 @@ class SeamlessTiling:
         if strength <= 0:
             return image
 
-        img_array = np.array(image, dtype=np.float32)
-        h, w = img_array.shape[:2]
-        blend_width = int(min(h, w) * 0.15 * strength)
+        img = np.array(image, dtype=np.float32)
+        h, w = img.shape[:2]
+        blend_size = max(4, int(min(h, w) * 0.20 * strength))
 
-        if blend_width < 4:
-            return image
+        result = img.copy()
 
-        # Step 1: Shift image by 50% - seams now in center
-        shifted = np.roll(np.roll(img_array, h // 2, axis=0), w // 2, axis=1)
+        # Create cosine weights for smooth blending
+        weights = self._cosine_weights(blend_size)
 
-        # Step 2: Create smooth blend mask for center cross
-        mask = self._create_center_blend_mask(h, w, blend_width)
+        # Horizontal seamless: blend left edge with wrapped right edge
+        for i in range(blend_size):
+            t = weights[i]
+            result[:, i] = (1 - t) * img[:, w - blend_size + i] + t * img[:, i]
+            result[:, w - 1 - i] = (1 - t) * img[:, blend_size - 1 - i] + t * img[:, w - 1 - i]
 
-        # Expand mask for RGB channels
-        if len(img_array.shape) == 3:
-            mask = mask[:, :, np.newaxis]
-
-        # Step 3: Blend shifted with original at center
-        result = shifted * (1 - mask) + img_array * mask
-
-        # Step 4: Shift back
-        result = np.roll(np.roll(result, -h // 2, axis=0), -w // 2, axis=1)
+        # Vertical seamless: blend top edge with wrapped bottom edge
+        for i in range(blend_size):
+            t = weights[i]
+            result[i, :] = (1 - t) * result[h - blend_size + i, :] + t * result[i, :]
+            result[h - 1 - i, :] = (1 - t) * result[blend_size - 1 - i, :] + t * result[h - 1 - i, :]
 
         return Image.fromarray(np.clip(result, 0, 255).astype(np.uint8))
 
-    def _create_center_blend_mask(self, h: int, w: int, blend_width: int) -> np.ndarray:
-        """
-        Create a mask that's 0 at center cross, 1 at edges.
-        Uses smoothstep for artifact-free blending.
-        """
-        # Horizontal distance from center
-        x = np.abs(np.arange(w) - w // 2)
-        x_mask = self._smoothstep(x, blend_width // 2, blend_width)
-
-        # Vertical distance from center
-        y = np.abs(np.arange(h) - h // 2)
-        y_mask = self._smoothstep(y, blend_width // 2, blend_width)
-
-        # Combine: both must be away from center
-        mask = np.outer(y_mask, np.ones(w)) * np.outer(np.ones(h), x_mask)
-
-        return mask
-
-    def _smoothstep(self, x: np.ndarray, edge0: float, edge1: float) -> np.ndarray:
-        """Smooth Hermite interpolation between 0 and 1."""
-        t = np.clip((x - edge0) / (edge1 - edge0 + 1e-8), 0, 1)
-        return t * t * (3 - 2 * t)
+    def _cosine_weights(self, size: int) -> np.ndarray:
+        """Generate cosine interpolation weights from 0 to 1."""
+        t = np.linspace(0, np.pi / 2, size)
+        return np.sin(t)
 
 
 # =============================================================================
