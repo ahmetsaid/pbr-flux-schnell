@@ -1,12 +1,18 @@
 # PBR Texture Generator - Segmind SSD-1B version
-from cog import BasePredictor, Input, Path
+from cog import BasePredictor, Input, Path, BaseModel
 import os
 import torch
 import numpy as np
-from typing import Iterator
 from PIL import Image
 from diffusers import StableDiffusionXLPipeline
 from scipy.ndimage import sobel, gaussian_filter
+
+
+class Output(BaseModel):
+    diffuse: Path
+    normal: Path
+    roughness: Path
+    ao: Path
 
 
 def make_seamless(image: Image.Image, strength: float = 0.5) -> Image.Image:
@@ -104,7 +110,7 @@ class Predictor(BasePredictor):
             description="Random seed (-1 for random)",
             default=-1
         ),
-    ) -> Iterator[Path]:
+    ) -> Output:
         if seed == -1:
             seed = int.from_bytes(os.urandom(2), "big")
         print(f"Seed: {seed}, Resolution: {resolution}, Steps: {num_steps}")
@@ -128,7 +134,6 @@ class Predictor(BasePredictor):
 
         diffuse_path = "/tmp/diffuse.png"
         image.save(diffuse_path)
-        yield Path(diffuse_path)
 
         print("Generating normal...")
         normal = generate_normal_map(image)
@@ -136,7 +141,6 @@ class Predictor(BasePredictor):
             normal = make_seamless(normal, tiling_strength)
         normal_path = "/tmp/normal.png"
         normal.save(normal_path)
-        yield Path(normal_path)
 
         print("Generating roughness...")
         roughness = generate_roughness_map(image)
@@ -144,7 +148,6 @@ class Predictor(BasePredictor):
             roughness = make_seamless(roughness, tiling_strength)
         roughness_path = "/tmp/roughness.png"
         roughness.save(roughness_path)
-        yield Path(roughness_path)
 
         print("Generating AO...")
         ao = generate_ao_map(image)
@@ -152,6 +155,12 @@ class Predictor(BasePredictor):
             ao = make_seamless(ao, tiling_strength)
         ao_path = "/tmp/ao.png"
         ao.save(ao_path)
-        yield Path(ao_path)
 
         print(f"Done! Seed: {seed}")
+
+        return Output(
+            diffuse=Path(diffuse_path),
+            normal=Path(normal_path),
+            roughness=Path(roughness_path),
+            ao=Path(ao_path)
+        )
