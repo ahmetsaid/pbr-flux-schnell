@@ -13,6 +13,7 @@ from pbr_maps import (
     NormalGenerator,
     AOGenerator,
     RoughnessGenerator,
+    EmissiveGenerator,
     SeamlessTiling,
     save_height_16bit
 )
@@ -42,6 +43,7 @@ class Predictor(BasePredictor):
         self.normal_generator = NormalGenerator()
         self.ao_generator = AOGenerator()
         self.roughness_generator = RoughnessGenerator()
+        self.emissive_generator = EmissiveGenerator()
         self.seamless_tiler = SeamlessTiling()
 
         print("All models ready!")
@@ -198,9 +200,12 @@ class Predictor(BasePredictor):
             base_roughness=roughness_base
         )
 
+        print("Generating emissive map...")
+        emissive = self.emissive_generator.estimate_emissive(image)
+
         # Step 6: Save outputs
         output_paths = self._save_outputs(
-            image, height, normal, ao, roughness,
+            image, height, normal, ao, roughness, emissive,
             output_16bit_height=output_16bit_height
         )
 
@@ -223,7 +228,7 @@ class Predictor(BasePredictor):
         )
         return output.images[0]
 
-    def _save_outputs(self, image, height, normal, ao, roughness, output_16bit_height):
+    def _save_outputs(self, image, height, normal, ao, roughness, emissive, output_16bit_height):
         """Save all output files"""
         paths = []
 
@@ -256,20 +261,26 @@ class Predictor(BasePredictor):
         ao.save(ao_path)
         paths.append(Path(ao_path))
 
+        # Emissive
+        emissive_path = "/tmp/emissive.png"
+        emissive.save(emissive_path)
+        paths.append(Path(emissive_path))
+
         # Grid preview (3x2)
         grid_path = "/tmp/grid.png"
-        grid = self._create_grid(image, height, normal, roughness, ao)
+        grid = self._create_grid(image, height, normal, roughness, ao, emissive)
         grid.save(grid_path)
         paths.append(Path(grid_path))
 
         return paths
 
-    def _create_grid(self, image, height, normal, roughness, ao):
-        """Create 3x2 preview grid: color, height, normal (top) | roughness, ao, blank (bottom)"""
+    def _create_grid(self, image, height, normal, roughness, ao, emissive):
+        """Create 3x2 preview grid: color, height, normal (top) | roughness, ao, emissive (bottom)"""
         w, h = image.size
         height_img = Image.fromarray((height * 255).astype(np.uint8), mode="L").convert("RGB")
         roughness_rgb = roughness.convert("RGB")
         ao_rgb = ao.convert("RGB")
+        emissive_rgb = emissive.convert("RGB")
 
         # 3x2 grid
         grid = Image.new("RGB", (w * 3, h * 2), color=(40, 40, 40))
@@ -278,5 +289,6 @@ class Predictor(BasePredictor):
         grid.paste(normal, (w * 2, 0))
         grid.paste(roughness_rgb, (0, h))
         grid.paste(ao_rgb, (w, h))
+        grid.paste(emissive_rgb, (w * 2, h))
 
         return grid

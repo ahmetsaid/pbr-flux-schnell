@@ -458,6 +458,65 @@ class RoughnessGenerator:
 
 
 # =============================================================================
+# EMISSIVE MAP GENERATION
+# =============================================================================
+
+class EmissiveGenerator:
+    """
+    Generate emissive/glow maps by detecting bright, saturated areas.
+    Perfect for neon, LED, glowing elements in textures.
+    """
+
+    def estimate_emissive(
+        self,
+        image: Image.Image,
+        threshold: float = 0.5,
+        saturation_boost: bool = True
+    ) -> Image.Image:
+        """
+        Extract emissive areas from RGB image.
+
+        Detects pixels that are both bright AND saturated (neon colors).
+        Pure white is less emissive than bright blue/pink/green.
+
+        Args:
+            image: RGB PIL image
+            threshold: Brightness threshold for emission (0-1)
+            saturation_boost: Boost saturated colors (neon effect)
+
+        Returns:
+            PIL grayscale emissive map (white = glowing)
+        """
+        # Convert to HSV using OpenCV (fast)
+        rgb = np.array(image)
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+
+        # Extract channels (OpenCV HSV: H=0-179, S=0-255, V=0-255)
+        saturation = hsv[:, :, 1].astype(np.float32) / 255.0
+        value = hsv[:, :, 2].astype(np.float32) / 255.0  # Brightness
+
+        # Emissive = bright areas
+        brightness_mask = np.clip((value - threshold) / (1 - threshold + 1e-8), 0, 1)
+
+        if saturation_boost:
+            # Boost saturated bright colors (neon effect)
+            # Saturated + bright = very emissive
+            # Desaturated + bright (white) = less emissive
+            sat_factor = 0.5 + 0.5 * saturation  # 0.5 to 1.0
+            emissive = brightness_mask * sat_factor
+        else:
+            emissive = brightness_mask
+
+        # Smooth slightly for nicer glow
+        emissive = gaussian_filter(emissive, sigma=1.0)
+
+        # Enhance contrast
+        emissive = np.clip(emissive * 1.5, 0, 1)
+
+        return Image.fromarray((emissive * 255).astype(np.uint8), mode="L")
+
+
+# =============================================================================
 # SEAMLESS TILING UTILITIES
 # =============================================================================
 
