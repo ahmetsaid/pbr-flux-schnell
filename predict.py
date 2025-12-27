@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 from diffusers import DiffusionPipeline
 from scipy.ndimage import sobel, gaussian_filter
+from typing import Optional
 
 
 def make_seamless(image: Image.Image, strength: float = 0.5) -> Image.Image:
@@ -94,8 +95,12 @@ class Predictor(BasePredictor):
     @torch.inference_mode()
     def predict(
         self,
+        input_image: Path = Input(
+            description="Optional: Upload your own texture image to generate PBR maps (skips AI generation)",
+            default=None
+        ),
         prompt: str = Input(
-            description="Text description of the texture",
+            description="Text description of the texture (ignored if input_image is provided)",
             default="seamless dark wood texture, highly detailed, 8k"
         ),
         negative_prompt: str = Input(
@@ -103,7 +108,7 @@ class Predictor(BasePredictor):
             default=""
         ),
         resolution: int = Input(
-            description="Output resolution",
+            description="Output resolution (only used when generating from prompt)",
             choices=[512, 1024],
             default=1024
         ),
@@ -112,7 +117,7 @@ class Predictor(BasePredictor):
             ge=0.0, le=1.0, default=0.5
         ),
         num_steps: int = Input(
-            description="Number of inference steps",
+            description="Number of inference steps (only used when generating from prompt)",
             ge=1, le=50, default=25
         ),
         seed: int = Input(
@@ -122,22 +127,29 @@ class Predictor(BasePredictor):
     ) -> list[Path]:
         if seed == -1:
             seed = int.from_bytes(os.urandom(2), "big")
-        print(f"Seed: {seed}, Resolution: {resolution}, Steps: {num_steps}")
 
-        enhanced_prompt = f"{prompt}, seamless tileable texture, top-down view, flat lighting, PBR material"
-        generator = torch.Generator("cuda").manual_seed(seed)
+        # Check if user provided an input image
+        if input_image is not None:
+            print("Using uploaded image for PBR map generation...")
+            image = Image.open(str(input_image)).convert("RGB")
+            print(f"Input image size: {image.size}")
+        else:
+            print(f"Seed: {seed}, Resolution: {resolution}, Steps: {num_steps}")
 
-        print("Generating color...")
-        output = self.pipe(
-            prompt=enhanced_prompt,
-            negative_prompt=negative_prompt if negative_prompt else None,
-            width=resolution,
-            height=resolution,
-            num_inference_steps=num_steps,
-            guidance_scale=3.0,
-            generator=generator,
-        )
-        image = output.images[0]
+            enhanced_prompt = f"{prompt}, seamless tileable texture, top-down view, flat lighting, PBR material"
+            generator = torch.Generator("cuda").manual_seed(seed)
+
+            print("Generating color...")
+            output = self.pipe(
+                prompt=enhanced_prompt,
+                negative_prompt=negative_prompt if negative_prompt else None,
+                width=resolution,
+                height=resolution,
+                num_inference_steps=num_steps,
+                guidance_scale=3.0,
+                generator=generator,
+            )
+            image = output.images[0]
 
         if tiling_strength > 0:
             image = make_seamless(image, tiling_strength)

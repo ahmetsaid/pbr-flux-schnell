@@ -40,12 +40,21 @@ output = replicate.run(
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
+| `input_image` | None | Upload your own texture to generate PBR maps |
 | `prompt` | - | Text description of the texture |
 | `negative_prompt` | "" | Things to avoid in the texture |
 | `resolution` | 1024 | Output size (512 or 1024) |
 | `tiling_strength` | 0.5 | Seamless tiling blend (0-1) |
 | `num_steps` | 25 | Inference steps (1-50, higher=better quality) |
 | `seed` | -1 | Random seed (-1 for random) |
+
+## Two Modes
+
+### 1. Generate from Prompt
+Leave `input_image` empty and provide a text prompt.
+
+### 2. Generate from Image
+Upload your own texture image - the model will generate normal, roughness, and AO maps from it.
 
 ## Example Prompts
 
