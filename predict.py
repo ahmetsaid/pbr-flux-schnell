@@ -98,6 +98,10 @@ class Predictor(BasePredictor):
             description="Text description of the texture",
             default="seamless dark wood texture, highly detailed, 8k"
         ),
+        negative_prompt: str = Input(
+            description="Things to avoid in the texture",
+            default=""
+        ),
         resolution: int = Input(
             description="Output resolution",
             choices=[512, 1024],
@@ -126,6 +130,7 @@ class Predictor(BasePredictor):
         print("Generating color...")
         output = self.pipe(
             prompt=enhanced_prompt,
+            negative_prompt=negative_prompt if negative_prompt else None,
             width=resolution,
             height=resolution,
             num_inference_steps=num_steps,
