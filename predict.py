@@ -1,11 +1,10 @@
-# PBR Texture Generator - SDXL Turbo version
+# PBR Texture Generator - Playground v2.5 version
 from cog import BasePredictor, Input, Path
 import os
 import torch
 import numpy as np
-from typing import Iterator
 from PIL import Image
-from diffusers import AutoPipelineForText2Image
+from diffusers import DiffusionPipeline
 from scipy.ndimage import sobel, gaussian_filter
 
 
@@ -67,11 +66,24 @@ def generate_ao_map(diffuse: Image.Image) -> Image.Image:
     return Image.fromarray((ao * 255).astype(np.uint8), mode="L")
 
 
+def create_grid(diffuse: Image.Image, normal: Image.Image, roughness: Image.Image, ao: Image.Image) -> Image.Image:
+    """Create 2x2 grid: color, normal, roughness, ao"""
+    w, h = diffuse.size
+    roughness_rgb = roughness.convert("RGB")
+    ao_rgb = ao.convert("RGB")
+    grid = Image.new("RGB", (w * 2, h * 2))
+    grid.paste(diffuse, (0, 0))
+    grid.paste(normal, (w, 0))
+    grid.paste(roughness_rgb, (0, h))
+    grid.paste(ao_rgb, (w, h))
+    return grid
+
+
 class Predictor(BasePredictor):
     def setup(self) -> None:
-        print("Loading SDXL Turbo...")
-        self.pipe = AutoPipelineForText2Image.from_pretrained(
-            "stabilityai/sdxl-turbo",
+        print("Loading Playground v2.5...")
+        self.pipe = DiffusionPipeline.from_pretrained(
+            "playgroundai/playground-v2.5-1024px-aesthetic",
             torch_dtype=torch.float16,
             variant="fp16",
             local_files_only=True
@@ -89,31 +101,40 @@ class Predictor(BasePredictor):
         resolution: int = Input(
             description="Output resolution",
             choices=[512, 1024],
-            default=512
+            default=1024
         ),
         tiling_strength: float = Input(
             description="Seamless tiling strength (0-1)",
             ge=0.0, le=1.0, default=0.5
         ),
+        num_steps: int = Input(
+            description="Number of inference steps",
+            ge=1, le=50, default=25
+        ),
         seed: int = Input(
             description="Random seed (-1 for random)",
             default=-1
         ),
-    ) -> Iterator[Path]:
+        output_format: str = Input(
+            description="Output format",
+            choices=["grid", "separate"],
+            default="separate"
+        ),
+    ) -> list[Path]:
         if seed == -1:
             seed = int.from_bytes(os.urandom(2), "big")
-        print(f"Seed: {seed}, Resolution: {resolution}")
+        print(f"Seed: {seed}, Resolution: {resolution}, Steps: {num_steps}")
 
-        enhanced_prompt = f"{prompt}, seamless tileable texture, top-down view, flat lighting"
+        enhanced_prompt = f"{prompt}, seamless tileable texture, top-down view, flat lighting, PBR material"
         generator = torch.Generator("cuda").manual_seed(seed)
 
-        print("Generating diffuse...")
+        print("Generating color...")
         output = self.pipe(
             prompt=enhanced_prompt,
             width=resolution,
             height=resolution,
-            num_inference_steps=4,
-            guidance_scale=0.0,
+            num_inference_steps=num_steps,
+            guidance_scale=3.0,
             generator=generator,
         )
         image = output.images[0]
@@ -121,32 +142,37 @@ class Predictor(BasePredictor):
         if tiling_strength > 0:
             image = make_seamless(image, tiling_strength)
 
-        diffuse_path = "/tmp/diffuse.png"
-        image.save(diffuse_path)
-        yield Path(diffuse_path)
-
         print("Generating normal...")
         normal = generate_normal_map(image)
         if tiling_strength > 0:
             normal = make_seamless(normal, tiling_strength)
-        normal_path = "/tmp/normal.png"
-        normal.save(normal_path)
-        yield Path(normal_path)
 
         print("Generating roughness...")
         roughness = generate_roughness_map(image)
         if tiling_strength > 0:
             roughness = make_seamless(roughness, tiling_strength)
-        roughness_path = "/tmp/roughness.png"
-        roughness.save(roughness_path)
-        yield Path(roughness_path)
 
         print("Generating AO...")
         ao = generate_ao_map(image)
         if tiling_strength > 0:
             ao = make_seamless(ao, tiling_strength)
-        ao_path = "/tmp/ao.png"
-        ao.save(ao_path)
-        yield Path(ao_path)
 
         print(f"Done! Seed: {seed}")
+
+        if output_format == "grid":
+            grid = create_grid(image, normal, roughness, ao)
+            grid_path = "/tmp/pbr_grid.png"
+            grid.save(grid_path)
+            return [Path(grid_path)]
+        else:
+            color_path = "/tmp/color.png"
+            normal_path = "/tmp/normal.png"
+            roughness_path = "/tmp/roughness.png"
+            ao_path = "/tmp/ao.png"
+
+            image.save(color_path)
+            normal.save(normal_path)
+            roughness.save(roughness_path)
+            ao.save(ao_path)
+
+            return [Path(color_path), Path(normal_path), Path(roughness_path), Path(ao_path)]

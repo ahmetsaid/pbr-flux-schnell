@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - playground
   workflow_dispatch:
 
 jobs:
@@ -20,5 +21,5 @@ jobs:
 
       - name: Build and Push
         run: |
-          cog build -t r8.im/ahmetsaid/texture-gen
-          cog push r8.im/ahmetsaid/texture-gen
+          cog build -t r8.im/vantilator2000/pbr-playground
+          cog push r8.im/vantilator2000/pbr-playground

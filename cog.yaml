@@ -16,7 +16,8 @@ build:
     - "protobuf"
     - "pillow"
     - "scipy"
+    - "safetensors"
   run:
-    - python -c "from diffusers import AutoPipelineForText2Image; AutoPipelineForText2Image.from_pretrained('stabilityai/sdxl-turbo', variant='fp16')"
+    - python -c "from diffusers import DiffusionPipeline; DiffusionPipeline.from_pretrained('playgroundai/playground-v2.5-1024px-aesthetic', variant='fp16')"
 
 predict: "predict.py:Predictor"
