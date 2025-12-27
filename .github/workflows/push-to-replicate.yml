@@ -11,6 +11,7 @@ on:
 jobs:
   push:
     runs-on: 4-core-runner
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
