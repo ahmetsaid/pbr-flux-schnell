@@ -1,4 +1,22 @@
 build:
+  gpu: true
+  cuda: "12.1"
   python_version: "3.11"
+  system_packages:
+    - "libgl1-mesa-glx"
+    - "libsm6"
+    - "libxext6"
+  python_packages:
+    - "torch==2.4.0"
+    - "torchvision==0.19.0"
+    - "diffusers==0.31.0"
+    - "transformers==4.44.0"
+    - "accelerate==0.33.0"
+    - "sentencepiece"
+    - "protobuf"
+    - "pillow"
+    - "scipy"
+  run:
+    - python -c "from diffusers import AutoPipelineForText2Image; AutoPipelineForText2Image.from_pretrained('stabilityai/sdxl-turbo', variant='fp16')"
 
 predict: "predict.py:Predictor"
